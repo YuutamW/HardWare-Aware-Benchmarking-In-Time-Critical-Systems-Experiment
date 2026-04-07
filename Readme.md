@@ -1,4 +1,4 @@
-# 🏎️ Data-Oriented Design vs. The Hardware: A Microbenchmarking Experiment
+# Data-Oriented Design vs. The Hardware: A Microbenchmarking Experiment
 
 > *A practical experiment exploring why code that looks perfectly fast on a whiteboard can be incredibly slow in reality due to physical computer hardware limits.*
 
