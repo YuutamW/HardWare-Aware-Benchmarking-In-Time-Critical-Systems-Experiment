@@ -15,8 +15,7 @@ The goal of this experiment is straightforward: Design the fastest possible O(1)
 ## Methodology
 Throughout this repository, I document a series of architectural approaches to this problem. Using Google Benchmark for software-level timing and Intel VTune Profiler for bare-metal hardware telemetry (running natively on an Intel CPU), I analyze exactly what the processor is doing under the hood.
 For each approach, I will:
+
     1. Introduce the routing concept and its intended benefits.
-
     2. Break down the bare-metal execution and hardware penalties (the  "bumps" in the pipeline).
-
     3. Improve upon the architecture in the next iteration based purely on the physical profiling data.
