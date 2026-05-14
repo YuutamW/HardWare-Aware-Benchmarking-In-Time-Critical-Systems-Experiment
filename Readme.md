@@ -42,7 +42,8 @@ Libraries: Google Benchmark (for statistical timing), Intel VTune Profiler (for 
 
 ## Foundation
 Before evaluating the different routing approaches, we established a strict, standardized environment. The common.hpp header defines the core data structures and the benchmarking constraints used across all tests.
-1. The Car Object
+1. The Car Object:
+
     We defined a minimal struct to represent our data payload.
     ```cpp
     struct Car
@@ -59,8 +60,9 @@ Before evaluating the different routing approaches, we established a strict, sta
     };
     ```
     * Data-Oriented Note: While the defined variables only take up 12 bytes, the C++ compiler automatically adds 4 bytes of padding to round the struct to 16 bytes. This ensures optimal memory alignment when arrays of Car objects are loaded into the CPU's 64-byte cache lines.
-    
- 2. The Constants
+
+ 2. The Constants:
+
  We establish the scale of the dataset and the exact target we are searching for to ensure consistency across all benchmarks.
     ```cpp
     #define GET_DIGIT(LP , POW) ((LP/POW) % 10)// Math to isolate a single 0-9 digit
@@ -76,7 +78,7 @@ Modern CPUs are incredibly aggressive at prefetching and caching data. If we run
         for(int i = 0; i < CACHE_SIZE; i += 64) {
             cacheTrash[i] = 1; 
         }
-    delete[] cacheTrash;
+        delete[] cacheTrash;
     }
     ```
     * Because the i9-14900HX has a 36 MB L3 Cache, we allocate a 40 MB dummy array and write to every 64th byte (the exact size of a cache line). This completely evicts our Car data from the processor, guaranteeing that every benchmark iteration forces a fresh, 80-nanosecond physical read from the DDR5 RAM.
