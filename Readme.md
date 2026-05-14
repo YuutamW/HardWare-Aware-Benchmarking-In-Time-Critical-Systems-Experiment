@@ -82,7 +82,7 @@ Modern CPUs are incredibly aggressive at prefetching and caching data. If we run
         delete[] cacheTrash;
     }
  ```
-    * Because the i9-14900HX has a 36 MB L3 Cache, we allocate a 40 MB dummy array and write to every 64th byte (the exact size of a cache line). This completely evicts our Car data from the processor, guaranteeing that every benchmark iteration forces a fresh, 80-nanosecond physical read from the DDR5 RAM.
+* Because the i9-14900HX has a 36 MB L3 Cache, we allocate a 40 MB dummy array and write to every 64th byte (the exact size of a cache line). This completely evicts our Car data from the processor, guaranteeing that every benchmark iteration forces a fresh, 80-nanosecond physical read from the DDR5 RAM.
 
  ### 4. Deterministic Data Generation:
 
