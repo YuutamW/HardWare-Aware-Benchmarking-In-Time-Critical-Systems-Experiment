@@ -43,8 +43,8 @@ Libraries: Google Benchmark (for statistical timing), Intel VTune Profiler (for 
 ## Foundation
 Before evaluating the different routing approaches, we established a strict, standardized environment. The common.hpp header defines the core data structures and the benchmarking constraints used across all tests.
  ### 1. The Car Object:
-
-    We defined a minimal struct to represent our data payload.
+We defined a minimal struct to represent our data payload.
+    
     ```cpp
     struct Car
     {
@@ -59,7 +59,7 @@ Before evaluating the different routing approaches, we established a strict, sta
         //c++ compiler will add another 4 bytes of padding to this struct in order to round to 16 bytes.
     };
     ```
-    * Data-Oriented Note: While the defined variables only take up 12 bytes, the C++ compiler automatically adds 4 bytes of padding to round the struct to 16 bytes. This ensures optimal memory alignment when arrays of Car objects are loaded into the CPU's 64-byte cache lines.
+* Data-Oriented Note: While the defined variables only take up 12 bytes, the C++ compilerautomatically adds 4 bytes of padding to round the struct to 16 bytes. This ensures optimalmemory alignment when arrays of Car objects are loaded into the CPU's 64-byte cache lines.
 
   ### 2. The Constants:
 
