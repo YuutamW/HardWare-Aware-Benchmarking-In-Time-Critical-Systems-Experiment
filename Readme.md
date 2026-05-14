@@ -59,7 +59,8 @@ We defined a minimal struct to represent our data payload.
         //c++ compiler will add another 4 bytes of padding to this struct in order to round to 16 bytes.
     };
  ```
-* Data-Oriented Note: While the defined variables only take up 12 bytes, the C++ compilerautomatically adds 4 bytes of padding to round the struct to 16 bytes. This ensures optimalmemory alignment when arrays of Car objects are loaded into the CPU's 64-byte cache lines.
+
+ * Data-Oriented Note: While the defined variables only take up 12 bytes, the C++ compilerautomatically adds 4 bytes of padding to round the struct to 16 bytes. This ensures optimalmemory alignment when arrays of Car objects are loaded into the CPU's 64-byte cache lines.
 
   ### 2. The Constants:
 
