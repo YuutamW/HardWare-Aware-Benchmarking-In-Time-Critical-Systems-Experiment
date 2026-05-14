@@ -114,9 +114,9 @@ By the time the CPU resolves the 9th dimension, it lands perfectly on the exact 
 
  To execute this, we first define the massive 9D array structure. We then use our GET_DIGIT macro (which isolates a specific digit using division and modulo arithmetic) to route the lookup.
   * Additional Notes: 
-  * * We wrap the flush caching function with time Pausing operations because we dont want to profile the additional cache dumping in the profiler. The benchmark assumes worst conditions, where each attempted access to the car object is on a "cold" cache - therefore is not part of the algorithm.
-  * * We use actual, static values as parameters in the GET_DIGIT function in order to prevent any unnecessary overhead from automated functions.
-  * * We use the operand "DoNotOptimize" in order to tell the compiler,  that even though we have a massive loop that doesnt actually do any logic or arent manipulating any of the data in any way, Not to skip each process. Else, the aggressive optimization that the compiler will use, would definetly skip this loop and not run this part of the code in any way. This way we gaurantee a "look-up" / access of the car object within the database.
+   * We wrap the flush caching function with time Pausing operations because we dont want to profile the additional cache dumping in the profiler. The benchmark assumes worst conditions, where each attempted access to the car object is on a "cold" cache - therefore is not part of the algorithm.
+   * We use actual, static values as parameters in the GET_DIGIT function in order to prevent any unnecessary overhead from automated functions.
+   * We use the operand "DoNotOptimize" in order to tell the compiler,  that even though we have a massive loop that doesnt actually do any logic or arent manipulating any of the data in any way, Not to skip each process. Else, the aggressive optimization that the compiler will use, would definetly skip this loop and not run this part of the code in any way. This way we gaurantee a "look-up" / access of the car object within the database.
 
   #### 1.Laying the DataStructre and the Database:
  ```cpp
