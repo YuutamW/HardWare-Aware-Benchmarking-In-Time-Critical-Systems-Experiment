@@ -33,6 +33,8 @@
 
 # Visual Studio specific
 .vs/
+
+*.vcxproj.user
 *.user
 *.userosscache
 *.sln.docstates
