@@ -104,7 +104,59 @@ Finally, GenerateTestPlates() uses the <random> library (std::mt19937) to genera
 
 
 ## 1st APPROACH: 9-Dimensional Object Array
-Intuition: Similiar to a simple hash table, we can decifer the position of the car object 
-by using the license-Plate's first digit for accessing the first layer of arrays, the second digit
-will decifer the obj's position within the 2nd layer and so forth until the last digit in the 9th layer. Trivial to prove that such algorithm is a deterministic O(1). Yet, the performance is a disaster: For each layer in the multi array, the CPU sends an ALU BRUNCH request and stalls until the calculation is complete before the next layer could be calculated. On the ALU's side , modular operations and division by numbers that arent devided by 2 is a massive calculation in the microarchitecture resolution. 
-/*9D_Array_Approach.cpp code snippet and exlpanation, Vtune profile spreadsheat and google benchmark result output txt file - proving the performance.*/
+
+ ## Intuition:
+
+Since a license plate is exactly 9 digits long (with each digit ranging from 0 to 9), we can theoretically map this directly to a 9-dimensional array. The first digit determines the index of the 1st dimension, the second digit determines the index of the 2nd dimension, and so on.
+By the time the CPU resolves the 9th dimension, it lands perfectly on the exact Car object. No searching, no collisions, no hashing-just pure, deterministic $O(1)$ array access.
+
+ ## The Code Implementation
+
+ To execute this, we first define the massive 9D array structure. We then use our GET_DIGIT macro (which isolates a specific digit using division and modulo arithmetic) to route the lookup.
+  * Additional Notes: 
+  * * We wrap the flush caching function with time Pausing operations because we dont want to profile the additional cache dumping in the profiler. The benchmark assumes worst conditions, where each attempted access to the car object is on a "cold" cache - therefore is not part of the algorithm.
+  * * We use actual, static values as parameters in the GET_DIGIT function in order to prevent any unnecessary overhead from automated functions.
+  * * We use the operand "DoNotOptimize" in order to tell the compiler,  that even though we have a massive loop that doesnt actually do any logic or arent manipulating any of the data in any way, Not to skip each process. Else, the aggressive optimization that the compiler will use, would definetly skip this loop and not run this part of the code in any way. This way we gaurantee a "look-up" / access of the car object within the database.
+
+  ### 1.Laying the DataStructre and the Database:
+ ```cpp
+using ObjArray = Car[10][10][10][10][10][10][10][10][10];
+static void BM_9D_OBJ_Array(benchmark::State& state) {
+    auto plates = GenerateTestPlates();
+    auto multiArr = new ObjArray(); // Allocate a 9 dimensional array.  
+    for (uint32_t lp : plates) { // Fill the DataBase with the generated plates.
+            multiArr[GET_DIGIT(lp, 100000000)]
+                    [GET_DIGIT(lp, 10000000)]
+                    [GET_DIGIT(lp, 1000000)]
+                    [GET_DIGIT(lp, 100000)]
+                    [GET_DIGIT(lp, 10000)]
+                    [GET_DIGIT(lp, 1000)]
+                    [GET_DIGIT(lp, 100)]
+                    [GET_DIGIT(lp, 10)]
+                    [GET_DIGIT(lp, 1)] = Car(lp, 999);
+    }
+    ...
+ ```
+ ### 2.Flushing the Cache and accessing the car:
+ ```cpp
+ for(auto _ : state) {
+        state.PauseTiming(); // pause googleBenchmark clock
+        __itt_pause();  // pause vtune profiling
+        FlushCacheCold(); // fill cache with garbage value 
+        __itt_resume(); // resume vtune profiling
+        state.ResumeTiming(); // resume googlebenchmark clock
+        
+        for (uint32_t lp : plates) { // for each licensePlate, access the car through the 9D array:
+            Car& accessedCar = multiArr
+                    [GET_DIGIT(lp, 100000000)]
+                    [GET_DIGIT(lp, 10000000)]
+                    [GET_DIGIT(lp, 1000000)]
+                    [GET_DIGIT(lp, 100000)]
+                    [GET_DIGIT(lp, 10000)]
+                    [GET_DIGIT(lp, 1000)]
+                    [GET_DIGIT(lp, 100)]
+                    [GET_DIGIT(lp, 10)]
+                    [GET_DIGIT(lp, 1)];
+            benchmark::DoNotOptimize(accessedCar.timeStamp);
+        }
+        ```

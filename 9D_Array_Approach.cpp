@@ -17,8 +17,8 @@ using ObjArray = Car[10][10][10][10][10][10][10][10][10];
 
 static void BM_9D_OBJ_Array(benchmark::State& state) {
     auto plates = GenerateTestPlates();
-    auto multiArr = new ObjArray();
-    for (uint32_t lp : plates) {
+    auto multiArr = new ObjArray(); // Allocate a 9 dimensional array.  
+    for (uint32_t lp : plates) { // Fill the DataBase with the generated plates.
             multiArr[GET_DIGIT(lp, 100000000)]
                     [GET_DIGIT(lp, 10000000)]
                     [GET_DIGIT(lp, 1000000)]
@@ -29,12 +29,13 @@ static void BM_9D_OBJ_Array(benchmark::State& state) {
                     [GET_DIGIT(lp, 10)]
                     [GET_DIGIT(lp, 1)] = Car(lp, 999);
     }
+
     for(auto _ : state) {
-        state.PauseTiming();
-        __itt_pause();
-        FlushCacheCold();
-        __itt_resume();
-        state.ResumeTiming();
+        state.PauseTiming(); // pause googleBenchmark clock
+        __itt_pause();  // pause vtune profiling
+        FlushCacheCold(); // fill cache with garbage value 
+        __itt_resume(); // resume vtune profiling
+        state.ResumeTiming(); // resume googlebenchmark clock
         for (uint32_t lp : plates) {
             Car& accessedCar = multiArr
                     [GET_DIGIT(lp, 100000000)]
@@ -52,4 +53,4 @@ static void BM_9D_OBJ_Array(benchmark::State& state) {
     }
     delete[] multiArr;
 }
-BENCHMARK(BM_9D_OBJ_Array)->Unit(benchmark::kMillisecond)->Iterations(5000);
+BENCHMARK(BM_9D_OBJ_Array)->Unit(benchmark::kMillisecond)->Iterations(1000);
