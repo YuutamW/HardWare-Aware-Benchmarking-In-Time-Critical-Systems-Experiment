@@ -116,7 +116,7 @@ By the time the CPU resolves the 9th dimension, it lands perfectly on the exact 
   #### Additional Notes: 
    * We wrap the flush caching function with time Pausing operations because we dont want to profile the additional cache dumping in the profiler. The benchmark assumes worst conditions, where each attempted access to the car object is on a "cold" cache - therefore is not part of the algorithm.
    * We use actual, static values as parameters in the GET_DIGIT function in order to prevent any unnecessary overhead from automated functions.
-   * We use the operand "DoNotOptimize" in order to tell the compiler,  that even though we have a massive loop that doesnt actually do any logic or arent manipulating any of the data in any way, Not to skip each process. Else, the aggressive optimization that the compiler will use, would definetly skip this loop and not run this part of the code in any way. This way we gaurantee a "look-up" / access of the car object within the database.
+   * We use the function "DoNotOptimize" in order to tell the compiler,  that even though we have a massive loop that doesnt actually do any logic or arent manipulating any of the data in any way, Not to skip each process. Else, the aggressive optimization that the compiler will use, would definetly skip this loop and not run this part of the code in any way. This way we gaurantee a "look-up" / access of the car object within the database.
 
   #### 1.Laying the DataStructre and the Database:
  ```cpp
@@ -163,13 +163,11 @@ static void BM_9D_OBJ_Array(benchmark::State& state) {
 ```
 ## The Results & Telemetry
 ### Google Benchmark Output: ~22.5ms for 5,000 iterations
-Run for 5000 iterations and the result is somewhat surprising-22.5ms for each iteration(1,000,000 obj access) - results in $(22.5/5000) = 4.5 ns per object.
-Although this seems very efficient(and it is),
-Running this approach through the Intel VTune Profiler reveals exactly where the silicon fails. Instead of a memory-bandwidth bottleneck, we hit a massive computational wall:
+Run for 5,000 iterations, the result is ~22.5 ms per iteration. Since each iteration performs 1,000,000 object accesses, this results in exactly 22.5 ns per object lookup. While 22.5 ns might seem fast on paper, running this approach through the Intel VTune Profiler reveals that the silicon is actually struggling massively. Instead of a memory-bandwidth bottleneck, we hit a massive computational wall:
 ### VTune Telemetry Summary
 | Metric | Value | Microarchitectural Impact |
-| :--- | :--- | :--- |
-| **Execution Time** | `0.234 ms` | Massive delay compared to linear lookup. |
+| :---   | :---  | :---                      |
+| **Execution Time** | `0.234 s` | Massive delay compared to linear lookup. |
 | **CPI Rate** | `0.53` | Cycles Per Instruction; indicates pipeline efficiency. |
 | **Core Bound** | `55.8%` | ALU is severely bottlenecked by division/modulo operations. |
 | **Store STLB Hit** | `19.2%` | Heavy TLB pressure from fragmenting 16GB of memory pages. |
