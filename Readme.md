@@ -174,7 +174,7 @@ Running this approach through the Intel VTune Profiler reveals exactly where the
 | **Core Bound** | `55.8%` | ALU is severely bottlenecked by division/modulo operations. |
 | **Store STLB Hit** | `19.2%` | Heavy TLB pressure from fragmenting 16GB of memory pages. |
 
-*(For the complete hardware counter breakdown, see the [raw VTune xlsx export](Exported_Vtune_Spreadsheets./RES_9D_OBJ.xlsx)).*
+*(For the complete hardware counter breakdown, see the [raw VTune xlsx export](/Exported_Vtune_Spreadsheets/RES_9D_OBJ.xlsx))*
  #### Core Bound (55.8%): 
  Over half of the CPU's pipeline slots are stalled directly inside the execution units. The ALU (Arithmetic Logic Unit) is completely saturated trying to process the heavy idiv (integer division) instructions required by the GET_DIGIT macro. The processor is so busy doing math that it cannot efficiently issue memory requests.
  #### Store Latency & STLB Overhead (~19.2%):
