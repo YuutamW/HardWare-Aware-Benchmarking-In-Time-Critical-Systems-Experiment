@@ -113,7 +113,7 @@ By the time the CPU resolves the 9th dimension, it lands perfectly on the exact 
  ### The Code Implementation
 
  To execute this, we first define the massive 9D array structure. We then use our GET_DIGIT macro (which isolates a specific digit using division and modulo arithmetic) to route the lookup.
-  * Additional Notes: 
+  #### Additional Notes: 
    * We wrap the flush caching function with time Pausing operations because we dont want to profile the additional cache dumping in the profiler. The benchmark assumes worst conditions, where each attempted access to the car object is on a "cold" cache - therefore is not part of the algorithm.
    * We use actual, static values as parameters in the GET_DIGIT function in order to prevent any unnecessary overhead from automated functions.
    * We use the operand "DoNotOptimize" in order to tell the compiler,  that even though we have a massive loop that doesnt actually do any logic or arent manipulating any of the data in any way, Not to skip each process. Else, the aggressive optimization that the compiler will use, would definetly skip this loop and not run this part of the code in any way. This way we gaurantee a "look-up" / access of the car object within the database.
@@ -135,7 +135,7 @@ static void BM_9D_OBJ_Array(benchmark::State& state) {
                     [GET_DIGIT(lp, 10)]
                     [GET_DIGIT(lp, 1)] = Car(lp, 999);
     }
-    ...
+    ...rest of code.
  ```
  #### 2.Flushing the Cache and accessing the car:
  ```cpp
@@ -159,4 +159,23 @@ static void BM_9D_OBJ_Array(benchmark::State& state) {
                     [GET_DIGIT(lp, 1)];
             benchmark::DoNotOptimize(accessedCar.timeStamp);
         }
-        ```
+        ...
+```
+## The Results & Telemetry
+### Google Benchmark Output: ~22.5ms for 5,000 iterations
+Run for 5000 iterations and the result is somewhat surprising-22.5ms for each iteration(1,000,000 obj access) - results in $(22.5/5000) = 4.5 ns per object.
+Although this seems very efficient(and it is),
+Running this approach through the Intel VTune Profiler reveals exactly where the silicon fails. Instead of a memory-bandwidth bottleneck, we hit a massive computational wall:
+### VTune Telemetry Summary
+| Metric | Value | Microarchitectural Impact |
+| :--- | :--- | :--- |
+| **Execution Time** | `0.234 ms` | Massive delay compared to linear lookup. |
+| **CPI Rate** | `0.53` | Cycles Per Instruction; indicates pipeline efficiency. |
+| **Core Bound** | `55.8%` | ALU is severely bottlenecked by division/modulo operations. |
+| **Store STLB Hit** | `19.2%` | Heavy TLB pressure from fragmenting 16GB of memory pages. |
+
+*(For the complete hardware counter breakdown, see the [raw VTune xlsx export](Exported_Vtune_Spreadsheets./RES_9D_OBJ.xlsx)).*
+ #### Core Bound (55.8%): 
+ Over half of the CPU's pipeline slots are stalled directly inside the execution units. The ALU (Arithmetic Logic Unit) is completely saturated trying to process the heavy idiv (integer division) instructions required by the GET_DIGIT macro. The processor is so busy doing math that it cannot efficiently issue memory requests.
+ #### Store Latency & STLB Overhead (~19.2%):
+ The processor's Second-Level Translation Lookaside Buffer (STLB) is under immense pressure. Because the 16GB array is so heavily fragmented across the system's memory pages, the hardware struggles to map the virtual addresses to physical RAM addresses, adding significant latency before the DRAM is even accessed.
