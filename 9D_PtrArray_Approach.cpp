@@ -40,8 +40,8 @@ static void BM_9D_PtrArray_Approach(benchmark::State& state) {
         state.PauseTiming();
         __itt_pause();
         FlushCacheCold();
-        __itt_resume();
         state.ResumeTiming();
+        __itt_resume();
         for (uint32_t lp : plates)  {
             Car* accessedCar = multiArr
             [GET_DIGIT(lp, 100000000)]

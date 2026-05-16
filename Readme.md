@@ -51,8 +51,8 @@ We defined a minimal struct to represent our data payload.
         //9 digits license plate - 4 bytes
         uint32_t licensePlate;
 
-        //Time elapsed since program start in nanoseconds
-        uint64_t timeStamp;
+        //Time elapsed since program start in nanoseconds. Ended up Using it by ensuring the lookup succeeded with donotoptimize    directive. (misleading var naming).
+        uint64_t timeStamp; // 8 bytes
 
         Car(uint32_t lp = 0,uint64_t Time = 0) : licensePlate(lp) , timeStamp(Time) {}
 
@@ -75,28 +75,45 @@ We defined a minimal struct to represent our data payload.
 Modern CPUs are incredibly aggressive at prefetching and caching data. If we run a loop 1,000 times, iterations 2 through 1000 will be artificially fast because the data is already sitting in the L1/L2 cache. To measure true RAM latency, we must physically force the CPU to forget the data between iterations.
  ``` cpp
     inline void FlushCacheCold() {
-        volatile char* cacheTrash = new char[CACHE_SIZE];
+        auto cacheTrash = std::make_unique<char[]>(CACHE_SIZE);
+        volatile char* rawTrash = cacheTrash.get(); //Extract a raw volatile pointer purely to bypass compiler optimization
         for(int i = 0; i < CACHE_SIZE; i += 64) {
-            cacheTrash[i] = 1; 
+            rawTrash[i] = 1;
         }
-        delete[] cacheTrash;
+    
     }
  ```
 * Because the i9-14900HX has a 36 MB L3 Cache, we allocate a 40 MB dummy array and write to every 64th byte (the exact size of a cache line). This completely evicts our Car data from the processor, guaranteeing that every benchmark iteration forces a fresh, 80-nanosecond physical read from the DDR5 RAM.
 
  ### 4. Deterministic Data Generation:
 
-Finally, GenerateTestPlates() uses the <random> library (std::mt19937) to generate exactly 1,000,000 unique 9-digit license plates. It shuffles them to prevent sequential access biases and explicitly inserts our TARGET_LP to guarantee a successful lookup during the benchmarks.
+Finally, GenerateTestPlates() uses the <random> library (std::mt19937) to generate exactly 1,000,000 unique 9-digit license plates. It shuffles them to prevent sequential access biases and explicitly inserts our license plates to guarantee a successful lookup during the benchmarks.
     
- ``` cpp
+ ```cpp
     inline std::vector<uint32_t> GenerateTestPlates() {
-        std::vector<uint32_t> plates;
-        std::mt19937 rng(42); // Fixed seed for fair comparison across tests
+        std::unordered_set<uint32_t> uniqueSet;
+
+        // Pre-allocate the hash map:
+        // This prevents the set from brutally re-allocating and re-hashing 
+        // memory every time it grows, saving massive setup time.
+        uniqueSet.reserve(NUM_CARS);
+
+        std::mt19937 rng(TARGET_INDEX); // Fixed seed for deterministic benchmarks
         std::uniform_int_distribution<uint32_t> dist(100000000, 999999999);
 
-        for(int i = 0; i < NUM_CARS; ++i) {
-            plates.push_back(dist(rng));
+
+
+        // Rejection Sampling: Keep generating until we hit exactly 1,000,000
+        while (uniqueSet.size() < NUM_CARS) {
+            uniqueSet.insert(dist(rng)); // Duplicates are automatically ignored
         }
+
+        // Transfer the guaranteed unique numbers to a contiguous, cache-friendly array
+        std::vector<uint32_t> plates(uniqueSet.begin(), uniqueSet.end());
+
+        // Shuffle the vector so the access pattern is more likely to be random
+        std::shuffle(plates.begin(), plates.end(), rng);
+
         return plates;
     }
  ```
@@ -114,16 +131,17 @@ By the time the CPU resolves the 9th dimension, it lands perfectly on the exact 
 
  To execute this, we first define the massive 9D array structure. We then use our GET_DIGIT macro (which isolates a specific digit using division and modulo arithmetic) to route the lookup.
   #### Additional Notes: 
-   * We wrap the flush caching function with time Pausing operations because we dont want to profile the additional cache dumping in the profiler. The benchmark assumes worst conditions, where each attempted access to the car object is on a "cold" cache - therefore is not part of the algorithm.
+   * We wrap the flush caching function with time Pausing operations because we dont want to profile the additional cache dumping in the profiler. The benchmark assumes worst conditions, where each attempted sequential access to the car objects is on a "cold" cache - therefore is not part of the measuring.
    * We use actual, static values as parameters in the GET_DIGIT function in order to prevent any unnecessary overhead from automated functions.
    * We use the function "DoNotOptimize" in order to tell the compiler,  that even though we have a massive loop that doesnt actually do any logic or arent manipulating any of the data in any way, Not to skip each process. Else, the aggressive optimization that the compiler will use, would definetly skip this loop and not run this part of the code in any way. This way we gaurantee a "look-up" / access of the car object within the database.
 
   #### 1.Laying the DataStructre and the Database:
  ```cpp
-using ObjArray = Car[10][10][10][10][10][10][10][10][10];
+using ObjArray = Car[10][10][10][10][10][10][10][10]; // 8 dimensional array in order to obey the initial strict 2GB Allowance from the OS
+
 static void BM_9D_OBJ_Array(benchmark::State& state) {
     auto plates = GenerateTestPlates();
-    auto multiArr = new ObjArray(); // Allocate a 9 dimensional array.  
+    auto multiArr = std::make_unique<ObjArray[]>(10); // Allocate a 9 dimensional array.  
     for (uint32_t lp : plates) { // Fill the DataBase with the generated plates.
             multiArr[GET_DIGIT(lp, 100000000)]
                     [GET_DIGIT(lp, 10000000)]
@@ -140,29 +158,30 @@ static void BM_9D_OBJ_Array(benchmark::State& state) {
  #### 2.Flushing the Cache and accessing the car:
  ```cpp
  for(auto _ : state) {
-        state.PauseTiming(); // pause googleBenchmark clock
-        __itt_pause();  // pause vtune profiling
-        FlushCacheCold(); // fill cache with garbage value 
-        __itt_resume(); // resume vtune profiling
-        state.ResumeTiming(); // resume googlebenchmark clock
-        
-        for (uint32_t lp : plates) { // for each licensePlate, access the car through the 9D array:
-            Car& accessedCar = multiArr
-                    [GET_DIGIT(lp, 100000000)]
-                    [GET_DIGIT(lp, 10000000)]
-                    [GET_DIGIT(lp, 1000000)]
-                    [GET_DIGIT(lp, 100000)]
-                    [GET_DIGIT(lp, 10000)]
-                    [GET_DIGIT(lp, 1000)]
-                    [GET_DIGIT(lp, 100)]
-                    [GET_DIGIT(lp, 10)]
-                    [GET_DIGIT(lp, 1)];
-            benchmark::DoNotOptimize(accessedCar.timeStamp);
+            state.PauseTiming(); // pause googleBenchmark clock
+            __itt_pause();  // pause vtune profiling
+            FlushCacheCold(); // fill cache with garbage value 
+            state.ResumeTiming(); // resume googlebenchmark clock
+            __itt_resume(); // resume vtune profiling
+            for (uint32_t lp : plates) {
+                Car& accessedCar = multiArr
+                        [GET_DIGIT(lp, 100000000)]
+                        [GET_DIGIT(lp, 10000000)]
+                        [GET_DIGIT(lp, 1000000)]
+                        [GET_DIGIT(lp, 100000)]
+                        [GET_DIGIT(lp, 10000)]
+                        [GET_DIGIT(lp, 1000)]
+                        [GET_DIGIT(lp, 100)]
+                        [GET_DIGIT(lp, 10)]
+                        [GET_DIGIT(lp, 1)];
+                benchmark::DoNotOptimize(accessedCar.timeStamp);
+            }
+            benchmark::ClobberMemory();
         }
         ...
 ```
 ## The Results & Telemetry
-### Google Benchmark Output: ~22.5ms for 5,000 iterations
+### Google Benchmark Output: 5,000 iterations, ~22.5ms per iteration
 Run for 5,000 iterations, the result is ~22.5 ms per iteration. Since each iteration performs 1,000,000 object accesses, this results in exactly 22.5 ns per object lookup. While 22.5 ns might seem fast on paper, running this approach through the Intel VTune Profiler reveals that the silicon is actually struggling massively. Instead of a memory-bandwidth bottleneck, we hit a massive computational wall:
 ### VTune Telemetry Summary
 | Metric | Value | Microarchitectural Impact |
@@ -177,3 +196,131 @@ Run for 5,000 iterations, the result is ~22.5 ms per iteration. Since each itera
  Over half of the CPU's pipeline slots are stalled directly inside the execution units. The ALU (Arithmetic Logic Unit) is completely saturated trying to process the heavy idiv (integer division) instructions required by the GET_DIGIT macro. The processor is so busy doing math that it cannot efficiently issue memory requests.
  #### Store Latency & STLB Overhead (~19.2%):
  The processor's Second-Level Translation Lookaside Buffer (STLB) is under immense pressure. Because the 16GB array is so heavily fragmented across the system's memory pages, the hardware struggles to map the virtual addresses to physical RAM addresses, adding significant latency before the DRAM is even accessed.
+
+## 2nd Approach: Routing Table
+### Intuition
+By minimizing the size of the array, the CPU could potentially fetch more data into the L3 cache at each cache miss. Furthermore, the contiguous storage array should allow the hardware prefetcher to load data before we even request it.
+### The Code Implementation
+This improved approach implements Data-Oriented Design. We use a 4GB flat array of 4-byte integers (indices) to act as a "Routing Table". These indices point to a tightly packed, contiguous `carStorage` array. 
+
+#### Side note (The Caveat)
+To isolate the memory bandwidth for this benchmark, I assumed the exact number of active cars (1,000,000) beforehand to pre-allocate a perfectly tight `carStorage` array. In a real-world system with 1 billion possible 9-digit plates, guaranteeing this perfect, continuous density dynamically is impossible without implementing custom memory arenas or page-based pool allocators. I have intentionally traded dynamic flexibility for absolute hardware speed (which could be argued as cheating in some sense).
+#### 1.Laying the DataStructre and the Database
+```cpp
+static void BM_RoutingTable(benchmark::State& state) {
+    auto plates = GenerateTestPlates();
+    auto carStorage = std::make_unique<Car[]>(NUM_CARS);
+    
+    // Allocate 1 billion 4-byte integers (4GB) instead of 16-byte objects
+    auto routingTable = std::make_unique<uint32_t[]>(1000000000);
+
+    for (uint32_t i = 0; i < NUM_CARS; ++i) {
+        uint32_t lp = plates[i];
+        carStorage[i] = Car(lp, 999);
+        routingTable[lp] = i; // Store the index, not the address
+    }
+    ...rest of code
+```
+#### 2.Flushing the Cache and accessing the car
+```cpp
+    // ...flush cache before starting a new pointer chasing-iteration
+
+        for (uint32_t lp : plates) { // for each of the 1m plates:
+            //Step 1: Fetch the 4-byte index
+            uint32_t fetchedIndex = routingTable[lp];
+            //Step 2: Access the dense array
+            Car* accessedCar = &carStorage[fetchedIndex];
+            benchmark::DoNotOptimize(accessedCar->timeStamp);
+        }
+...rest of code
+```
+## The Results & Telemetry
+### Google Benchmark Output: 1,000 iterations, ~21.7ms per iteration
+Run for 1,000 iterations, the result is ~21.7 ms per iteration. Since each iteration performs 1,000,000 object accesses, this results in 21.7ns on average per object lookup.
+
+Turns out, by completely eliminating the heavy integer division math of the 9D array, and shrinking the footprint from 16GB to 4GB, The Approach only improved the lookup time by a fraction of a nanosecond (from 22.5 ns to 21.7 ns).
+
+Why didn't this fix the bottleneck? *([The Intel VTune profiling table](/Exported_Vtune_Spreadsheets/RES_ROUTING_TABLE.xlsx))* gives the exact answer.
+#### VTune Telemetry & Assembly Analysis
+|Metric |	Value |	Microarchitectural Impact|
+| :---   | :---  | :---                      |
+| **Execution Time** |	`17.75 s` |	Massive cumulative time spent stalled waiting for memory.|
+| **CPI Rate** | `4.91`|	Cycles Per Instruction; extremely high, proving the pipeline is frozen.|
+| **DRAM Bound** | `82.6%`	|Successfully traded the ALU math bottleneck for a pure physical RAM bottleneck.|
+
+#### The Pointer Chasing Trap
+By removing the heavy math of the 9D Array, in doing so, This accidentally created a new, equally destructive bottleneck: a data dependency chain in memory. 
+To find a car, the CPU must now execute two distinct steps: Fetch the intermediate index from the routingTable, (Cache Miss $\rightarrow$ RAM Stall).
+Use that fetched index to pull the Car from carStorage (Cache Miss $\rightarrow$ RAM Stall).
+Because Step 2 strictly requires the exact value from Step 1, the CPU is stalled. It cannot look ahead or optimize the second memory fetch because it doesn't have the address yet. In time-critical systems, waiting for a chained memory pointer is just as destructive to throughput as a heavy ALU math stall. Although, it's important to note that even though the throughput hasn't improved drastically - 4GB as opposed to 16GB is a massive improvement and much more desired in a real world scenario. 
+
+
+## 3rd Approach: 1D Linear Object Array (The Brute Force Baseline)
+### Intuition: 
+The profiling of the 9-Dimensional array proved that heavy arithmetic (division and modulo) destroys the CPU pipeline before it can even fetch the memory, The Routing table proved that dependant address fetching in each lookup is a massive hit to performance. Therefore, by combining the best of these two approaches-the next logical step is to unfortunately go back to an undesirable 16GB datastructure in order to achieve true, unobstructed O(1) access and eliminate the GET_DIGIT math entirely. 
+The most direct solution is to flatten the architecture. Since the maximum license plate value is 999,999,999 I have to allocate a single, massive 1-Dimensional array with 1 billion slots. By using the 9-digit license plate as the literal index (array[licensePlate]), This reduces the access logic to a single, native CPU instruction: a base-pointer offset. No division, no traversal—just immediate memory addressing. - This is an impractical solution, as most systems do not usually rely on such a large DRAM component to achieve throughput. But as the Vtune and google benchmark telemetry will soon reveal, There is a major Lesson to be learned and apply.
+
+### The Code Implementation
+#### 1. Laying the DataStructre and the Database:
+```cpp
+static void BM_1D_Linear_Array(benchmark::State& state)
+{
+    auto plates = GenerateTestPlates();
+    auto multiArr = std::make_unique<Car[]>(1000000000ULL); // allocate 1 Bilion cars
+    for (uint32_t lp : plates) // Fill 1 milion random plates into the database.
+    {
+        multiArr[lp] = Car(lp, 999);
+    }
+...rest of code
+```
+ #### 2. Flushing the Cache and accessing the car:
+```cpp
+for (auto _ : state)
+    {
+        //... fill cache with grabage before next iteration.(flushCaceCold)
+
+        for (uint32_t lp : plates)
+        {
+            Car& accessedCar = multiArr[lp]; // access the car directly in the array - 1 memory request.
+            benchmark::DoNotOptimize(accessedCar.timeStamp);
+        }
+...rest of code
+```
+## The Results & Telemetry
+### Google Benchmark Output: ~2.99 ms per iteration
+Run for 1,000 iterations, the result is ~2.99 ms per iteration. Since each iteration performs 1,000,000 object accesses, this results in exactly 2.99 ns per object lookup.
+When I first saw this output in the terminal, I honestly thought I had broken the benchmark.
+
+I double-checked my FlushCacheCold() function and my DoNotOptimize functions, assuming the compiler had somehow cheated and skipped the loop. The approach is randomly jumping around a massive, empty 16 Gigabyte RAM allocation. A single physical read from DDR5 RAM should take roughly 80 nanoseconds. The prefetcher and brunch prediction mechanisms are powerful, but the result is suspiciuosly **x20 times Faster!**. There has to be something going on that im not aware of. 
+After reading more about the observed phenomena and consulting several LLMs , I Learned that the reason behind the extra-ordinary throughput achieved, is due to a mechanism in x86 cpus called **Memory Level Parallelism (MLP)**. 
+A simple explanation of MLP is that the CPU can send multiple requests to load from memory simultaniously. 
+In the context of the 1D Linear approach, it can be observed in the *([Vtune profiling table](/Exported_Vtune_Spreadsheets/RES_1D_LINEAR.xlsx))*    
+
+### VTune Telemetry Summary
+| Metric | Value | Microarchitectural Impact |
+| :---   | :---  | :---                      |
+| **Execution Time** | `0.41 s`|	An absolutely massive speedup compared to the Routing Table lookup. |
+| **CPI Rate** | `0.96` | Cycles Per Instruction; the pipeline is flowing smoothly again (down from 4.91). |
+| **DRAM Bound** | `24.3%`	| The CPU is still fetching from RAM, but it is no longer hopelessly frozen by it.|
+
+### Memory Level Parallelism (MLP)
+In the Routing Table approach, the CPU was trapped in a serial dependency. It had to wait for the index to arrive from RAM before it could ask for the Car.But in this Brute Force 1D Array, I completely removed that intermediate step. Inside my loop, multiArr[lp] only depends on the license plate lp (which is already sitting locally in the L1 cache). Because the memory addresses don't depend on each other, the CPU's Out-of-Order execution engine -*(basically a mechanism that looks ahead at the next Assembly inst., and if it finds any that are independent of current stalled process, jumps to execute/calculate that piece of the program and returns to finish the current task that has finished it's stall state.)* realizes the loop is just a massive list of independent memory requests. 
+And so, The CPU fires off dozens of parallel requests directly to the physical RAM at the exact same time *(More correctly, The ReOrder Buffer - basically queues finished/calculated instructions finished from the OoO engine and only retires the instructions once the last inst. in the queue has been processed by the OoO engine, This is to keep some order behind the chaotic OoO execution order and not break the program.- Therefore, The OoO Engine executed a dozen of LOD requests, the ROB "grouped" them and retired the requests in parallel.   I hope im right about some of these simple analogies....)* 
+Even though every single Car still physically takes 80 nanoseconds to travel from the DDR5 sticks to the CPU, the hardware pipelines the fetches so incredibly well that the wait time drops to 2.99 nanoseconds.
+
+## 4th Approach: Batched Routing Table
+### Intuition
+After benchmarking the 1D_Linear approach,
+ The Data speaks for itself - the Routing Table managed to access the car within ~3ns; That means that the CPU didnt entirely stall for the entire Load process (given that DRAM is ~80ns). As discussed before, what probably happened is that the OoO Engine realised that the next car to look-up in the data set is not dependant on the previous license plate, So instead of stalling while the licensePlate No.1 was being fetched from memory, it meanwhile moved to take care of the next licensePlate(No.2) it added another memory request execution for No.2, the ROB "Filled it's tray" with requests to load from memory, and so on...
+ That Got me Thinking:  
+ How can we combine the Two Approaches to elevate the lookup time?
+The problem with the routing table was that the data was dependant on each other: 
+SCENARIO ROUTING TABLE: LOOKUP CAR A
+1. fetch index of car A - mem request in routingTable[A.lp](80ns).
+2. use fetched index to fetch car A - cannot begin until step 1 is complete(stall).
+
+But what if we use the MLP mechanic to elevate the lookup between each 2 steps? within each two steps, the data is dependant. which means that for every third step  the data is Independant...
+So the approach is to "exploit" the MLP mechanic in order to "batch" multiple memory requests for the index array, Then we batch multiple memory requests constrained by the return value of step 1.
+
+### Exploiting the MLP Mechanic in the Routing Table Approach
+Batching a set of indices to be executed at a constant interlude should allow some 'freedom' for the OoO to try and execute a couple of memory requests instead of stalling. But what is the optimal size for this 'Batch' of requests?    

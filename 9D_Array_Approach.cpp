@@ -13,11 +13,11 @@
  */
 
 //APPROACH 1: MultiArrRAM (16GB Object Array)
-using ObjArray = Car[10][10][10][10][10][10][10][10][10];
+using ObjArray = Car[10][10][10][10][10][10][10][10]; // 8 dimensional array in order to obey the strict 2GB Allowance from the OS
 
 static void BM_9D_OBJ_Array(benchmark::State& state) {
     auto plates = GenerateTestPlates();
-    auto multiArr = new ObjArray(); // Allocate a 9 dimensional array.  
+    auto multiArr = std::make_unique<ObjArray[]>(10); // Allocate a 9 dimensional array.  
     for (uint32_t lp : plates) { // Fill the DataBase with the generated plates.
             multiArr[GET_DIGIT(lp, 100000000)]
                     [GET_DIGIT(lp, 10000000)]
@@ -34,8 +34,8 @@ static void BM_9D_OBJ_Array(benchmark::State& state) {
         state.PauseTiming(); // pause googleBenchmark clock
         __itt_pause();  // pause vtune profiling
         FlushCacheCold(); // fill cache with garbage value 
-        __itt_resume(); // resume vtune profiling
         state.ResumeTiming(); // resume googlebenchmark clock
+        __itt_resume(); // resume vtune profiling
         for (uint32_t lp : plates) {
             Car& accessedCar = multiArr
                     [GET_DIGIT(lp, 100000000)]
@@ -51,6 +51,6 @@ static void BM_9D_OBJ_Array(benchmark::State& state) {
         }
         benchmark::ClobberMemory();
     }
-    delete[] multiArr;
+    
 }
 BENCHMARK(BM_9D_OBJ_Array)->Unit(benchmark::kMillisecond)->Iterations(1000);

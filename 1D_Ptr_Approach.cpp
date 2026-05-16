@@ -18,8 +18,8 @@ static void BM_OneDArrayPtr(benchmark::State& state) {
         state.PauseTiming();
         __itt_pause();
         FlushCacheCold();
-        __itt_resume();
         state.ResumeTiming();
+        __itt_resume();
 
         for (uint32_t lp : plates) {
             Car* accessedCar = carArr[lp];
