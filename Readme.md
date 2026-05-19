@@ -394,7 +394,7 @@ While it cannot beat the Linear approach, the throughput achieved has been impro
 #### [VTune Telemetry](/Gathered%20Results/RES_BATCH.csv) comparison with the naive approach:
 
 | Metric | Routing Table | Batched Routing Table | Microarchitectural Impact |
-| :---   | :---  | :---  | :---   | :---   |
+| :---   | :---  | :---  | :---   | 
 |**CPI Rate**| `8.38` |	`3.12` | cycles per inst. dropping to 3.12 means the processor is executing instructions faster due to less pipeline hazards|
 |**Front-End Bound**| `~65%` | `~39.9%` | The ~25% decrease indicates the instruction fetch/decode pipeline is stalling the execution less often |
 | **Bad Speculation** | `~62.8%` | `0.0%` | ~62.8~% of the pipeline slots were wasted due to branch mispredictions and the subsequent pipeline flushes in the naive approach |
