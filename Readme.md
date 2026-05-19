@@ -248,6 +248,8 @@ Why didn't this fix the bottleneck? *([The Intel VTune profiling table](/Exporte
 | **CPI Rate** | `4.91`|	Cycles Per Instruction; extremely high, proving the pipeline is frozen.|
 | **DRAM Bound** | `82.6%`	|Successfully traded the ALU math bottleneck for a pure physical RAM bottleneck.|
 
+ * Of course, there are many more interesting columns that reveal clues - as shown in the exported sheet, but i have left them out for brevity.  
+
 #### The Pointer Chasing Trap
 By removing the heavy math of the 9D Array, in doing so, This accidentally created a new, equally destructive bottleneck: a data dependency chain in memory. 
 To find a car, the CPU must now execute two distinct steps: Fetch the intermediate index from the routingTable, (Cache Miss $\rightarrow$ RAM Stall).
@@ -287,7 +289,7 @@ for (auto _ : state)
 ...rest of code
 ```
 ## The Results & Telemetry
-### Google Benchmark Output: ~2.99 ms per iteration
+### [Google Benchmark Output](): ~2.99 ms per iteration
 Run for 1,000 iterations, the result is ~2.99 ms per iteration. Since each iteration performs 1,000,000 object accesses, this results in exactly 2.99 ns per object lookup.
 When I first saw this output in the terminal, I honestly thought I had broken the benchmark.
 
@@ -304,23 +306,67 @@ In the context of the 1D Linear approach, it can be observed in the *([Vtune pro
 | **DRAM Bound** | `24.3%`	| The CPU is still fetching from RAM, but it is no longer hopelessly frozen by it.|
 
 ### Memory Level Parallelism (MLP)
-In the Routing Table approach, the CPU was trapped in a serial dependency. It had to wait for the index to arrive from RAM before it could ask for the Car.But in this Brute Force 1D Array, I completely removed that intermediate step. Inside my loop, multiArr[lp] only depends on the license plate lp (which is already sitting locally in the L1 cache). Because the memory addresses don't depend on each other, the CPU's Out-of-Order execution engine -*(basically a mechanism that looks ahead at the next Assembly inst., and if it finds any that are independent of current stalled process, jumps to execute/calculate that piece of the program and returns to finish the current task that has finished it's stall state.)* realizes the loop is just a massive list of independent memory requests. 
-And so, The CPU fires off dozens of parallel requests directly to the physical RAM at the exact same time *(More correctly, The ReOrder Buffer - basically queues finished/calculated instructions finished from the OoO engine and only retires the instructions once the last inst. in the queue has been processed by the OoO engine, This is to keep some order behind the chaotic OoO execution order and not break the program.- Therefore, The OoO Engine executed a dozen of LOD requests, the ROB "grouped" them and retired the requests in parallel.   I hope im right about some of these simple analogies....)* 
-Even though every single Car still physically takes 80 nanoseconds to travel from the DDR5 sticks to the CPU, the hardware pipelines the fetches so incredibly well that the wait time drops to 2.99 nanoseconds.
+In the Routing Table approach, the CPU was trapped in a serial dependency. It had to wait for the index to arrive from RAM before it could ask for the Car.But in the Brute Force 1D Array, I completely removed that intermediate step. Inside my loop, multiArr[lp] only depends on the license plate lp (which is already sitting locally in the L1 cache). Because the memory addresses don't depend on each other, the CPU's Out-of-Order execution engine - comes into effect.*(to put simply, a mechanism that can look ahead at the next Assembly inst., and if it finds any that can be "calculated" or is a L/S inst. independent of other inst. to execute/calculate, completes the task and flags the register as a "completed" task. In the case of Load instructions, as long as the memory address doesnt depend on a still-calculating register, the CPU's Load/Store Unit fires off the memory request and assigns it to an available Line Fill Buffer (LFB).)* . 
+And so, The CPU fires off dozens of parallel requests directly to the physical RAM at the exact same time *(More accurately, the Reorder Buffer (ROB) tracks the original sequential order of the code to ensure the chaotic OoO execution doesn't break the program state. - Therefore, While the ROB is stalled waiting for the first 80ns memory load to finish, the OoO engine uses the LFBs to fetch the next memory requests in parallel. Once the first load arrives and retires, the ROB can retire the subsequent loads because their data was already fetched in the background)*
+
+Even though every single Car still physically takes 80 nanoseconds to travel from the DDR5 sticks to the CPU, the hardware pipelines the fetches well enough that the wait time drops to 2.99 nanoseconds.
 
 ## 4th Approach: Batched Routing Table
 ### Intuition
-After benchmarking the 1D_Linear approach,
+ After benchmarking the 1D_Linear approach,
  The Data speaks for itself - the Routing Table managed to access the car within ~3ns; That means that the CPU didnt entirely stall for the entire Load process (given that DRAM is ~80ns). As discussed before, what probably happened is that the OoO Engine realised that the next car to look-up in the data set is not dependant on the previous license plate, So instead of stalling while the licensePlate No.1 was being fetched from memory, it meanwhile moved to take care of the next licensePlate(No.2) it added another memory request execution for No.2, the ROB "Filled it's tray" with requests to load from memory, and so on...
  That Got me Thinking:  
  How can we combine the Two Approaches to elevate the lookup time?
-The problem with the routing table was that the data was dependant on each other: 
-SCENARIO ROUTING TABLE: LOOKUP CAR A
-1. fetch index of car A - mem request in routingTable[A.lp](80ns).
-2. use fetched index to fetch car A - cannot begin until step 1 is complete(stall).
-
+ The problem with the routing table was that the data was dependant on each other: 
+ SCENARIO ROUTING TABLE: ACCESS CAR A
+ 1. fetch index of car A - mem request in routingTable (80ns).
+ 2. use fetched index to fetch car A - cannot begin until step 1 is complete(stall).
+ 
 But what if we use the MLP mechanic to elevate the lookup between each 2 steps? within each two steps, the data is dependant. which means that for every third step  the data is Independant...
 So the approach is to "exploit" the MLP mechanic in order to "batch" multiple memory requests for the index array, Then we batch multiple memory requests constrained by the return value of step 1.
 
 ### Exploiting the MLP Mechanic in the Routing Table Approach
-Batching a set of indices to be executed at a constant interlude should allow some 'freedom' for the OoO to try and execute a couple of memory requests instead of stalling. But what is the optimal size for this 'Batch' of requests?    
+Batching a set of indices to be executed at a constant interlude should break the serial dependency chain in the naive routing table approach because it allows the OoO to look ahead and dispatch multiple memory requests to the CPU's LFBs instead of stalling.
+But what is the optimal size for this 'Batch' of requests?   
+
+I have searched the web extensively and consulted variuos LLMs about the number of LFBs present in my cpu. Unfortunately i couldnt figure the Exact number , but seems like most search results yielded between 10 and 16. Nevertheless, I have benchmarked and compared different buffer sizes(8,10,16,32,64,128) and found that the most optimal size was 16, which came on top consistently over other batch sizes.
+### The Code Implementation
+#### 1. Laying the foundation - batched indexes Buffer
+```cpp
+    // ... same datastructure as RoutingTable approach.
+    const int BATCH_SIZE = 16; // An attempted Guess at amount of LFBs in my CPU(Extensive tests revealed 16 to perform higher throughput consistentently - i9-14900HX).
+    uint32_t batchedIndices[BATCH_SIZE]; // local L1 buffer
+```
+#### 2. the Batched iterations
+```cpp
+    //... flush cache between iterations
+
+    for (size_t b = 0; b < NUM_CARS; b += BATCH_SIZE) {
+            // Calculate if we have a full 16 batch, or just a small "tail" left over. for this project(1milion cars) there will be no tail.
+            size_t currentBatchSize = std::min((size_t)BATCH_SIZE, (size_t)NUM_CARS - b);
+
+            // step 1: 1st batch - MLP for indices
+            for (size_t i = 0; i < currentBatchSize; i++) {
+                batchedIndices[i] = routingTable[plates[b + i]];
+            }
+
+            // step 2: MLP gather of objects 
+            for (size_t i = 0; i < currentBatchSize; i++) {
+                Car* accessedCar = &carStorage[batchedIndices[i]];
+                benchmark::DoNotOptimize(accessedCar->timeStamp);
+            }
+        }
+```
+### [Google Benchmark Output](): best test yielded ~16.1ms per iteration 
+While it cannot beat the Linear approach, the throughput achieved has been improved over the *"naive"* Routing Table  approach. [I have gathered multiple Google BenchMark test results](), testing both results - under chaotic and interrupted invornement by the Vtune profiler , and 'neutral' environement (without Vtune profiling) and the results were mostly consistent. The batched approach has achieved better performance even under heavy workload for the CPU. Furthermore, to prove this wasn't just a "Turbo Boost" thermal anomaly, I ran the benchmarks for a sustained 2 seconds to induce thermal throttling, which means that Even under extreme thermal stress and lowered clock speeds, the Batch approach still came on top.
+#### [VTune Telemetry]() comparison with naive approach:
+| Metric | Routing Table | Batched Routing Table | Microarchitectural Impact |
+| :---   | :---  | :---  | :---   | :---   |
+|**CPI Rate**| *4.91* |	*3.12* | cycles per inst. dropping to 3.12 means the processor is executing instructions significantly faster due to less pipeline hazards|
+|**Front-End Bound**| *~65%* | *~39.8%* | fetch and decode per inst. was ~25% faster |
+| **Bad Speculation** | *0.135849* | ** | |
+| **L1 Bound** | ~50^-3 | 
+| **L2 Bound** | 0.0596953 |
+| **L3 Bound** | ~60^-3 |
+|**DRAM Bound**| *82.6%* | *69.2%* | Memory bottleneck has been reduced by 13%|
+|

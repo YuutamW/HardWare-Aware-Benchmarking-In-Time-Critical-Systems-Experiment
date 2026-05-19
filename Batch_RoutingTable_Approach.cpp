@@ -1,6 +1,7 @@
 #include "common.hpp"
 
 
+
 /*Batch Routing Table Approach:
 *--Introduction-- 
 * After benchmarking the Routing table approach and the 1D_Linear
@@ -29,23 +30,22 @@
 */
 
 static void BM_BATCH_RoutingTable(benchmark::State& state) {
-    auto plates = GenerateTestPlates();
+    auto plates = GenerateRandomTestPlates();
     
     auto carStorage = std::make_unique<Car[]>(NUM_CARS);
     
     // Allocate 1 billion 4-byte integers instead of 8-byte pointers
     auto routingTable = std::make_unique<uint32_t[]>(1000000000);
     
-
     for (uint32_t i = 0; i < NUM_CARS; ++i) {
         uint32_t lp = plates[i];
         carStorage[i] = Car(lp, 999);
         routingTable[lp] = i; // Store the index, not the address
     }
-    const int BATCH_SIZE = 8; // An attempted Guess(As far as i could find info about my CPU) at Optimization to saturate the 16 Line Fill Buffers (LFBs) while preventing Reorder Buffer (ROB) and L1 Cache thrashing.
+    
+    const int BATCH_SIZE = 16; // An attempted Guess at amount of LFBs in my CPU(Extensive tests revealed 16 to perform higher throughput consistentently - i9-14900HX).
     uint32_t batchedIndices[BATCH_SIZE]; // local L1 buffer
     
-
     for (auto _ : state) {
         state.PauseTiming();
         __itt_pause();
@@ -54,7 +54,7 @@ static void BM_BATCH_RoutingTable(benchmark::State& state) {
         __itt_resume();
 
         for (size_t b = 0; b < NUM_CARS; b += BATCH_SIZE) {
-            // Calculate if we have a full 8 batch, or just a small "tail" left over. for this project(1milion cars) there will be no tail.
+            // Calculate if we have a full 16 batch, or just a small "tail" left over. for this project(1milion cars) there will be no tail.
             size_t currentBatchSize = std::min((size_t)BATCH_SIZE, (size_t)NUM_CARS - b);
 
             // step 1: 1st batch - MLP for indices
@@ -62,15 +62,14 @@ static void BM_BATCH_RoutingTable(benchmark::State& state) {
                 batchedIndices[i] = routingTable[plates[b + i]];
             }
 
-            // step 2: MLP gather of objects (Using standard loop to avoid stale data)
+            // step 2: MLP gather of objects 
             for (size_t i = 0; i < currentBatchSize; i++) {
                 Car* accessedCar = &carStorage[batchedIndices[i]];
                 benchmark::DoNotOptimize(accessedCar->timeStamp);
             }
-        
         }
         benchmark::ClobberMemory();
     }
 }
 
-BENCHMARK(BM_BATCH_RoutingTable)->Unit(benchmark::kMillisecond)->Iterations(1000);
+BENCHMARK(BM_BATCH_RoutingTable)->Name("Batch_RoutingTable")->Unit(benchmark::kMillisecond)->Iterations(1000);

@@ -16,7 +16,7 @@
 using ObjArray = Car[10][10][10][10][10][10][10][10]; // 8 dimensional array in order to obey the strict 2GB Allowance from the OS
 
 static void BM_9D_OBJ_Array(benchmark::State& state) {
-    auto plates = GenerateTestPlates();
+    auto plates = GenerateRandomTestPlates();
     auto multiArr = std::make_unique<ObjArray[]>(10); // Allocate a 9 dimensional array.  
     for (uint32_t lp : plates) { // Fill the DataBase with the generated plates.
             multiArr[GET_DIGIT(lp, 100000000)]

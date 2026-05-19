@@ -13,7 +13,7 @@ native CPU instruction: a base-pointer offset. No division, no traversal—just 
 
 static void BM_1D_Linear_Array(benchmark::State& state)
 {
-    auto plates = GenerateTestPlates();
+    auto plates = GenerateRandomTestPlates();
     auto multiArr = std::make_unique<Car[]>(1000000000ULL); // allocate 1 Bilion cars
     for (uint32_t lp : plates) // Fill 1 milion random plates into the database.
     {

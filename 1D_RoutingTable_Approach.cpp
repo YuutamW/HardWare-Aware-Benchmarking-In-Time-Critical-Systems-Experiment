@@ -25,7 +25,7 @@
 // APPROACH 4: 1D Routing Table (4GB - 4 bytes per slot)
 
 static void BM_RoutingTable(benchmark::State& state) {
-    auto plates = GenerateTestPlates();
+    auto plates = GenerateRandomTestPlates();
     auto carStorage = std::make_unique<Car[]>(NUM_CARS);
     
     // Allocate 1 billion 4-byte integers instead of 16-byte objects - 4GB
@@ -60,4 +60,4 @@ static void BM_RoutingTable(benchmark::State& state) {
     }
 }
 
-BENCHMARK(BM_RoutingTable)->Unit(benchmark::kMillisecond)->Iterations(1000);
+BENCHMARK(BM_RoutingTable)->Name("2_Baseline_RoutingTable")->Unit(benchmark::kMillisecond)->Iterations(1000);

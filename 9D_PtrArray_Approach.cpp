@@ -15,7 +15,7 @@
 using PtrArray = Car*[10][10][10][10][10][10][10][10][10];
 
 static void BM_9D_PtrArray_Approach(benchmark::State& state) {
-    auto plates = GenerateTestPlates();
+    auto plates = GenerateRandomTestPlates();
     
     auto multiArr = new PtrArray();
     std::vector<Car*> allocatedCars;

@@ -42,7 +42,7 @@ inline void FlushCacheCold() {
 }
 
 // BATCH GENERATOR: Create 1,000,000 random unique cars
-inline std::vector<uint32_t> GenerateTestPlates() {
+inline std::vector<uint32_t> GenerateRandomTestPlates() {
     std::unordered_set<uint32_t> uniqueSet;
 
     // Pre-allocate the hash map:

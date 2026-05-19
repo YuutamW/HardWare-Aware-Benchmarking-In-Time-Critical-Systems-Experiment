@@ -4,7 +4,7 @@
 // APPROACH 3: OneD_ArrayApproach (8GB Flat Pointer Array)
 static void BM_OneDArrayPtr(benchmark::State& state) {
     
-    auto plates = GenerateTestPlates();
+    auto plates = GenerateRandomTestPlates();
     // Allocate 1 billion pointers (8GB)
     Car** carArr = new Car*[1000000000](); 
     std::vector<Car*> allocatedCars;
