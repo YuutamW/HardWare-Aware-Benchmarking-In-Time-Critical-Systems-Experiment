@@ -24,15 +24,22 @@ However, in time-critical and real-time systems, proving an algorithm is mathema
 
 ## The Inspiration
 The premise for this experiment was sparked by a question that i came up with during algorithm course in 3rd semester of my studies. The teacher showed us the basics of hash table datastructures where the given example was hashing a number to the table by it's 1st digit (using modulo operation hashing). This was to show that the number '72' & '52' could be mapped to the same bucket. and in turn there will be different solutions to this problem. 
+
 That led me to ask the professor after class, *what if we make another hash table for each bucket?* - meaning that if '72' & '52' are mapped to the same bucket, we can run another hash function on the 2nd digit, routing each number to different 'nested' buckets. 
 *But what about an N digit number?* - That would mean we would need a hash table sized N that consists of Hash tables sized N in each bucket, and so on and so on... 
+
 On paper that is a deterministic "access" time for each object, but in real world scenarios, the real time to access an pbject is a nightmare due to different hardware limitations.
+
 So how do algorithm reaserchers really optimize their algorithm? 
 The professor gave a somewhat theoretical answer - *"In cases like these sometimes the Algorithm will change and might be preferred to use less optimal time complexity solutions"*. 
+
 I was unsatisfied with the answer but left it at that for the time being.
+
 One day, While looking out at a parking lot from my balcony, Observing the license plates on the cars i remembered my curiosity regarding a question that left me unsatisfied and thought of a practical systems design question:
+
 How would a time-critical system efficiently access a massive database of vehicles using a 9-digit identifier (license plates)? 
 And so, the project was born. 
+
 ## The Objective
 The goal of this experiment is straightforward: Design the fastest possible throughput for a large dataset of car objects and accessing a unique car with it's 9 digit license plate as a key to the data set, bound strictly by the physical limitations of the hardware rather than just algorithmic theory.
 
