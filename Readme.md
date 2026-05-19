@@ -397,7 +397,7 @@ While it cannot beat the Linear approach, the throughput achieved has been impro
 | :---   | :---  | :---  | :---   | 
 |**CPI Rate**| `8.38` |	`3.12` | cycles per inst. dropping to 3.12 means the processor is executing instructions faster due to less pipeline hazards|
 |**Front-End Bound**| `~65%` | `~39.9%` | The ~25% decrease indicates the instruction fetch/decode pipeline is stalling the execution less often |
-| **Bad Speculation** | `~62.8%` | `0.0%` | ~62.8~% of the pipeline slots were wasted due to branch mispredictions and the subsequent pipeline flushes in the naive approach |
+| **Bad Speculation** | `~62.8%` | `0.0%` | ~62.8% of the pipeline slots were wasted due to branch mispredictions and the subsequent pipeline flushes in the naive approach |
 | **L1 Bound** | `~62.1%` | `~15.3%` | ~46.8% Less L1 Cache Stalls. The CPU spent significantly less time stalled waiting for data from the L1 cache |
 | **L2 Bound** | `0.0%`| `~1.4%` | L2 cache stalls have increased by ~1.5% in the batched approach |
 | **L3 Bound** | `~12.4%` | `0.0%` | *(12.4% -> 0%)* batched requests successfully pulled data closer to the execution units before it was needed |
