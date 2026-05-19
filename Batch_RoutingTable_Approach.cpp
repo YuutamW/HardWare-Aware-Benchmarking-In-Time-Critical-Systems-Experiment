@@ -34,28 +34,28 @@ static void BM_BATCH_RoutingTable(benchmark::State& state) {
     
     auto carStorage = std::make_unique<Car[]>(NUM_CARS);
     
-    // Allocate 1 billion 4-byte integers instead of 8-byte pointers
+    // 1 billion 4-byte integers
     auto routingTable = std::make_unique<uint32_t[]>(1000000000);
     
     for (uint32_t i = 0; i < NUM_CARS; ++i) {
         uint32_t lp = plates[i];
         carStorage[i] = Car(lp, 999);
-        routingTable[lp] = i; // Store the index, not the address
+        routingTable[lp] = i; // Stores the index
     }
     
-    const int BATCH_SIZE = 16; // An attempted Guess at amount of LFBs in my CPU(Extensive tests revealed 16 to perform higher throughput consistentently - i9-14900HX).
+    const size_t BATCH_SIZE = 16; // An attempted Guess of LFB num.(Extensive tests revealed 16 achieves higher throughput consistentently - i9-14900HX).
     uint32_t batchedIndices[BATCH_SIZE]; // local L1 buffer
     
     for (auto _ : state) {
+        __itt_pause(); 
         state.PauseTiming();
-        __itt_pause();
         FlushCacheCold();
         state.ResumeTiming();
         __itt_resume();
 
         for (size_t b = 0; b < NUM_CARS; b += BATCH_SIZE) {
-            // Calculate if we have a full 16 batch, or just a small "tail" left over. for this project(1milion cars) there will be no tail.
-            size_t currentBatchSize = std::min((size_t)BATCH_SIZE, (size_t)NUM_CARS - b);
+            // Calculates if a full 16 batch or a "tail" left over.
+            size_t currentBatchSize = std::min(BATCH_SIZE, NUM_CARS - b);
 
             // step 1: 1st batch - MLP for indices
             for (size_t i = 0; i < currentBatchSize; i++) {
@@ -72,4 +72,4 @@ static void BM_BATCH_RoutingTable(benchmark::State& state) {
     }
 }
 
-BENCHMARK(BM_BATCH_RoutingTable)->Name("Batch_RoutingTable")->Unit(benchmark::kMillisecond)->Iterations(1000);
+BENCHMARK(BM_BATCH_RoutingTable)->Name("Batch_RoutingTable")->Unit(benchmark::kMillisecond)->Iterations(ITERATIONS);

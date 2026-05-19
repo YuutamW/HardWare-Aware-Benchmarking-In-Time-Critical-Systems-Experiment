@@ -38,18 +38,18 @@ static void BM_RoutingTable(benchmark::State& state) {
     }
 
     for (auto _ : state) {
-        state.PauseTiming();
         __itt_pause();
+        state.PauseTiming();
         FlushCacheCold();
         __itt_resume();
         state.ResumeTiming();
 
         
             for (uint32_t lp : plates) {
-                //Step 1: Fetch the 4-byte index
+                //Step 1: Fetch the 4-byte index - mem request(~80ns)
                 uint32_t fetchedIndex = routingTable[lp];
 
-                //Step 2: Access the dense array
+                //Step 2: Access the dense array - Data dependancy
                 Car* accessedCar = &carStorage[fetchedIndex];
 
                 benchmark::DoNotOptimize(accessedCar->timeStamp);
@@ -60,4 +60,4 @@ static void BM_RoutingTable(benchmark::State& state) {
     }
 }
 
-BENCHMARK(BM_RoutingTable)->Name("2_Baseline_RoutingTable")->Unit(benchmark::kMillisecond)->Iterations(1000);
+BENCHMARK(BM_RoutingTable)->Name("Baseline_RoutingTable")->Unit(benchmark::kMillisecond)->Iterations(ITERATIONS);

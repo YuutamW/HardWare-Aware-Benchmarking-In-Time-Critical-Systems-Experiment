@@ -14,7 +14,7 @@ struct Car
     //9 digits license plate - 4 bytes
     uint32_t licensePlate;
 
-    //Time elapsed since program start in nanoseconds. Ended up Using it by ensuring the lookup succeeded with donotoptimize directive. (misleading var naming).
+    //Time elapsed since program start in nanoseconds. Ended up Using it by ensuring the lookup succeeded with donotoptimize func. (misleading var naming).
     uint64_t timeStamp; // 8 bytes
     
     Car(uint32_t lp = 0,uint64_t Time = 0) : licensePlate(lp) , timeStamp(Time) {}
@@ -24,12 +24,12 @@ struct Car
 
 
 #define GET_DIGIT(LP , POW) ((LP/POW) % 10)// Math to isolate a single 0-9 digit
-
+#define ITERATIONS 1000
 
 const uint32_t TARGET_LP = 123456789;
 const uint32_t TARGET_INDEX = 42;
 const int CACHE_SIZE = 40 * 1024 * 1024; // 40 MB for L3 Flush - tailored for my L3 (~36MB)
-const int NUM_CARS = 1000000;
+const size_t NUM_CARS = 1000000;
 
 // Helper function to flush the cache
 inline void FlushCacheCold() {
@@ -42,29 +42,29 @@ inline void FlushCacheCold() {
 }
 
 // BATCH GENERATOR: Create 1,000,000 random unique cars
-inline std::vector<uint32_t> GenerateRandomTestPlates() {
-    std::unordered_set<uint32_t> uniqueSet;
+inline std::vector<uint32_t> GenerateTestPlates() {
+        std::unordered_set<uint32_t> uniqueSet;
 
-    // Pre-allocate the hash map:
-    // This prevents the set from brutally re-allocating and re-hashing 
-    // memory every time it grows, saving massive setup time.
-    uniqueSet.reserve(NUM_CARS);
+        // Pre-allocate the hash map:
+        // This prevents the set from re-allocating and re-hashing 
+        // memory every time it grows - to save setup time.
+        uniqueSet.reserve(NUM_CARS);
 
-    std::mt19937 rng(TARGET_INDEX); // Fixed seed for deterministic benchmarks
-    std::uniform_int_distribution<uint32_t> dist(100000000, 999999999);
+        std::mt19937 rng(TARGET_INDEX); // Fixed seed for deterministic benchmarks
+        std::uniform_int_distribution<uint32_t> dist(100000000, 999999999);
 
-    
 
-    // Rejection Sampling: Keep generating until we hit exactly 1,000,000
-    while (uniqueSet.size() < NUM_CARS) {
-        uniqueSet.insert(dist(rng)); // Duplicates are automatically ignored
-    }
 
-    // Transfer the guaranteed unique numbers to a contiguous, cache-friendly array
-    std::vector<uint32_t> plates(uniqueSet.begin(), uniqueSet.end());
+        // Rejection Sampling: Keeps generating until 1,000,000
+        while (uniqueSet.size() < NUM_CARS) {
+            uniqueSet.insert(dist(rng)); // Duplicates are automatically ignored
+        }
 
-    // Shuffle the vector so the access pattern is more likely to be random
-    std::shuffle(plates.begin(), plates.end(), rng);
+        // Transfers the guaranteed unique numbers to a cache-friendly array
+        std::vector<uint32_t> plates(uniqueSet.begin(), uniqueSet.end());
 
-    return plates;
+        // Shuffles the vector so the access pattern is more likely to be random
+        std::shuffle(plates.begin(), plates.end(), rng);
+
+        return plates;
 }

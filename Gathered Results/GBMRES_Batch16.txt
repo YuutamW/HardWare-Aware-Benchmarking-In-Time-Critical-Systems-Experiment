@@ -1,0 +1,12 @@
+2026-05-16T04:28:24+03:00
+Running C:\Users\yotam\source\TimeCrit\TimeCritSuite\x64\Release\TimeCritSuite.exe
+Run on (32 X 2419 MHz CPU s)
+CPU Caches:
+  L1 Data 48 KiB (x16)
+  L1 Instruction 32 KiB (x16)
+  L2 Unified 2048 KiB (x16)
+  L3 Unified 36864 KiB (x1)
+--------------------------------------------------------------------------------
+Benchmark                                      Time             CPU   Iterations
+--------------------------------------------------------------------------------
+BM_BATCH_RoutingTable/iterations:1000        197 ms         20.0 ms         1000
